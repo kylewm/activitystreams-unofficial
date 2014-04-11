@@ -348,7 +348,36 @@ class Source(object):
   _PERMASHORTCITATION_RE = re.compile(r'\(([^:\s)]+\.[^\s)]{2,})[ /]([^\s)]+)\)$')
 
   @staticmethod
-  def original_post_discovery(activity):
+  def _query_author_for_original(activity, cache):
+    from bs4 import BeautifulSoup
+    import requests
+    import urllib
+
+    author_url = activity.get('author', {}).get('url')
+    syndication_url = activity.get('url')
+
+    if not author_url or not syndication_url:
+      return None
+
+    endpoint = cache.get('OPD ' + author_url)
+    if not endpoint:
+      r = requests.get(author_url)
+      if r.status_code // 100 != 2:
+        return None
+
+      soup = BeautifulSoup(r.text)
+      tag = soup.find('link', attrs={'rel': 'original-post-discovery'})
+      if tag and tag['href']:
+        endpoint = urlparse.urljoin(author_url, tag['href'])
+        cache.set('OPD ' + author_url, endpoint)
+
+    if endpoint:
+      query = "{}?{}".format(
+        endpoint, urllib.urlencode({'syndication': syndication_url}))
+      return query
+
+  @staticmethod
+  def original_post_discovery(activity, cache):
     """Discovers original post links and stores them as tags, in place.
 
     This is a variation on http://indiewebcamp.com/original-post-discovery . It
@@ -365,9 +394,15 @@ class Source(object):
     def article_urls(field):
       return set(util.trim_nulls(a.get('url') for a in obj.get(field, [])
                                  if a['objectType'] == 'article'))
+
     attachments = article_urls('attachments')
     tags = article_urls('tags')
     urls = attachments | set(util.extract_links(content))
+
+    # find originals from a query endpoint, if there is one
+    queryresult = Source._query_author_for_original(obj, cache)
+    if queryresult:
+      urls.add(queryresult)
 
     # Permashortcitations are short references to canonical copies of a given
     # (usually syndicated) post, of the form (DOMAIN PATH). Details:
