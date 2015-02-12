@@ -1076,14 +1076,32 @@ class TwitterTest(testutil.TestCase):
       self.assertEquals('<span class="verb">tweet</span>:', got.description)
       self.assertEquals(preview, got.content)
 
+  def test_tweet_truncate(self):
+    """A bunch of tests to exercise the tweet shortening algorithm
+    """
+    orig = u"""Despite names,
+ind.ie&indie.vc are NOT #indieweb @indiewebcamp
+indiewebcamp.com/2014-review#Indie_Term_Re-use
+@iainspad @sashtown @thomatronic (ttk.me t4_81)"""
+    expected = orig
+    self.assertEquals(expected, self.twitter._truncate(orig, None, False))
+
+    orig = u'url http://foo.co/bar ellipsize http://foo.co/baz'
+    expected = u'url http://foo.co/bar ellipsize…'
+    self.twitter.MAX_TWEET_LENGTH = 20
+    self.twitter.TCO_LENGTH = 5
+    self.assertEquals(orig, self.twitter._truncate(orig, None, False))
+
+
   def test_no_ellipsize_real_tweet(self):
+    self.maxDiff = None
     orig = u"""Despite names,
 ind.ie&indie.vc are NOT #indieweb @indiewebcamp
 indiewebcamp.com/2014-review#Indie_Term_Re-use
 @iainspad @sashtown @thomatronic (ttk.me t4_81)"""
     preview = u"""Despite names,
 ind.ie&indie.vc are NOT #indieweb @indiewebcamp
-<a href="http://indiewebcamp.com/2014-review#Indie_Term_Re-use">indiewebcamp.com/2014-review#Indie_Term_Re-use</a>
+<a href="http://indiewebcamp.com/2014-review#Indie_Term_Re-use">indiewebcamp.com/2014-review#In...</a>
 @iainspad @sashtown @thomatronic (ttk.me t4_81)"""
 
     self.expect_urlopen(
@@ -1096,10 +1114,10 @@ ind.ie&indie.vc are NOT #indieweb @indiewebcamp
     obj['content'] = orig
     obj['url'] = 'http://tantek.com/2015/013/t1/names-ind-ie-indie-vc-not-indieweb'
 
-    actual_preview = self.twitter.preview_create(obj, include_link=True).content
+    actual_preview = self.twitter.preview_create(obj, include_link=False).content
     self.assertEquals(preview, actual_preview)
 
-    self.twitter.create(obj, include_link=True)
+    self.twitter.create(obj, include_link=False)
 
   def test_ellipsize_real_tweet(self):
     """Test ellipsizing a tweet that was giving us trouble. If you do not
