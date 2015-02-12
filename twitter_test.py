@@ -1079,30 +1079,83 @@ class TwitterTest(testutil.TestCase):
   def test_tweet_truncate(self):
     """A bunch of tests to exercise the tweet shortening algorithm
     """
-    orig = u"""Despite names,
-ind.ie&indie.vc are NOT #indieweb @indiewebcamp
-indiewebcamp.com/2014-review#Indie_Term_Re-use
-@iainspad @sashtown @thomatronic (ttk.me t4_81)"""
-    expected = orig
-    self.assertEquals(expected, self.twitter._truncate(orig, None, False))
+    twitter.MAX_TWEET_LENGTH = 140
+    twitter.TCO_LENGTH = 23
+
+    orig = (
+      u'Hey #indieweb, the coming storm of webmention Spam may not be '
+      u'far away. Those of us that have input fields to send webmentions '
+      u'manually may already be getting them')
+    expected = (
+      u'Hey #indieweb, the coming storm of webmention Spam may not '
+      u'be far away. Those of us that have input fields to… '
+      u'(https://ben.thatmustbe.me/note/2015/1/31/1/)')
+    result = self.twitter._truncate(orig, 'https://ben.thatmustbe.me/note/2015/1/31/1/', False)
+    self.assertEquals(expected, result)
+
+    orig = expected = (
+      u'Despite names,\n'
+      u'ind.ie&indie.vc are NOT #indieweb @indiewebcamp\n'
+      u'indiewebcamp.com/2014-review#Indie_Term_Re-use\n'
+      u'@iainspad @sashtown @thomatronic (ttk.me t4_81)')
+    result = self.twitter._truncate(orig, None, False)
+    self.assertEquals(expected, result)
+
+    orig = expected = (
+      u'@davewiner I stubbed a page on the wiki for '
+      u'https://indiewebcamp.com/River4. Edits/improvmnts from users are '
+      u'welcome! @kevinmarks @julien51 @aaronpk')
+    result = self.twitter._truncate(orig, None, False)
+    self.assertEquals(expected, result)
+
+    orig = expected = (
+      u'This is a long tweet with (foo.com/parenthesized-urls) and urls '
+      u'that wikipedia.org/Contain_(Parentheses), a url with a query '
+      u'string;foo.withknown.com/example?query=parameters')
+    result = self.twitter._truncate(orig, None, False)
+    self.assertEquals(expected, result)
+
+    orig = (
+      u'This is a long tweet with (foo.com/parenthesized-urls) and urls '
+      u'that wikipedia.org/Contain_(Parentheses), that is one charc too '
+      u'long:foo.withknown.com/example?query=parameters')
+    expected = (
+      u'This is a long tweet with (foo.com/parenthesized-urls) and urls '
+      u'that wikipedia.org/Contain_(Parentheses), that is one charc too '
+      u'long:…')
+    result = self.twitter._truncate(orig, None, False)
+    self.assertEquals(expected, result)
+
+    twitter.MAX_TWEET_LENGTH = 20
+    twitter.TCO_LENGTH = 5
 
     orig = u'url http://foo.co/bar ellipsize http://foo.co/baz'
     expected = u'url http://foo.co/bar ellipsize…'
-    self.twitter.MAX_TWEET_LENGTH = 20
-    self.twitter.TCO_LENGTH = 5
-    self.assertEquals(orig, self.twitter._truncate(orig, None, False))
+    result = self.twitter._truncate(orig, None, False)
+    self.assertEquals(expected, result)
 
+    orig = u'too long\nextra whitespace\tbut should include url'
+    expected = u'too long… (http://obj.ca)'
+    result = self.twitter._truncate(orig, 'http://obj.ca', False)
+    self.assertEquals(expected, result)
+
+    orig = expected = u'trailing slash http://www.foo.co/'
+    result = self.twitter._truncate(orig, None, False)
+    self.assertEquals(expected, result)
 
   def test_no_ellipsize_real_tweet(self):
     self.maxDiff = None
-    orig = u"""Despite names,
-ind.ie&indie.vc are NOT #indieweb @indiewebcamp
-indiewebcamp.com/2014-review#Indie_Term_Re-use
-@iainspad @sashtown @thomatronic (ttk.me t4_81)"""
-    preview = u"""Despite names,
-ind.ie&indie.vc are NOT #indieweb @indiewebcamp
-<a href="http://indiewebcamp.com/2014-review#Indie_Term_Re-use">indiewebcamp.com/2014-review#In...</a>
-@iainspad @sashtown @thomatronic (ttk.me t4_81)"""
+    orig = (
+      u'Despite names,\n'
+      u'ind.ie&indie.vc are NOT #indieweb @indiewebcamp\n'
+      u'indiewebcamp.com/2014-review#Indie_Term_Re-use\n'
+      u'@iainspad @sashtown @thomatronic (ttk.me t4_81)')
+
+    preview = (
+      u'Despite names,\n'
+      u'ind.ie&indie.vc are NOT #indieweb @indiewebcamp\n'
+      u'<a href="http://indiewebcamp.com/2014-review#Indie_Term_Re-use">indiewebcamp.com/2014-review#In...</a>\n'
+      '@iainspad @sashtown @thomatronic (ttk.me t4_81)')
 
     self.expect_urlopen(
       twitter.API_POST_TWEET_URL + '?status=' + urllib.quote_plus(orig.encode('utf-8')),

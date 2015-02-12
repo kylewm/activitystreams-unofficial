@@ -601,6 +601,16 @@ class Twitter(source.Source):
 
     Return: string, the possibly shortened and ellipsized tweet text
     """
+    def trunc_to_nearest_word(text, length):
+      # try stripping trailing whitespace first
+      text = text.rstrip()
+      if len(text) <= length:
+        return text
+      # walk backwards until we find a delimiter
+      for j in xrange(length, -1, -1):
+        if text[j] in ',.;: \t\r\n':
+          return text[:j]
+
     links, splits = util.tokenize_links(content, skip_bare_cc_tlds=True)
     max = MAX_TWEET_LENGTH
     if include_url:
@@ -612,16 +622,17 @@ class Twitter(source.Source):
 
     tokens = []
     for i in xrange(len(links)):
-      tokens.append(('text', splits[i]))
+      if splits[i]:
+        tokens.append(('text', splits[i]))
       tokens.append(('link', links[i]))
-    tokens.append(('text', splits[-1]))
+    if splits[-1]:
+      tokens.append(('text', splits[-1]))
 
     length = 0
     shortened = []
     truncated = False
 
-    for i, toktuple in enumerate(tokens):
-      toktype, token = toktuple
+    for i, (toktype, token) in enumerate(tokens):
       tokmax = max - length
 
       # links are all or nothing, either add it or don't
@@ -637,12 +648,11 @@ class Twitter(source.Source):
       # truncate text to the nearest word
       else:
         # account for ellipsis if this is not the last token, or it
-        # has to be truncated
+        # will be truncated
         if i < len(tokens) - 1 or len(token) > tokmax:
           tokmax -= 1
         if len(token) > tokmax:
-          # FIXME arg, this doesn't do the right thing when there are leading spaces, e.g. ' ellipsize'
-          token = token[:tokmax].rsplit(' ', 1)[0]
+          token = trunc_to_nearest_word(token, tokmax)
           if token:
             length += len(token)
             shortened.append(token)
